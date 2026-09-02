@@ -1,0 +1,49 @@
+modLoader = "javafml"
+loaderVersion = "[47,)"
+license = "The JSON License"
+issueTrackerURL = "https://g.tizu.dev/hexcessible"
+
+[[mods]]
+modId = "hexcessible"
+version = "${version}"
+displayName = "Hexcessible"
+displayURL = "https://g.tizu.dev/hexcessible"
+logoFile = "assets/hexcessible/icon.png"
+credits = "Ruby (tizu), ElNico56"
+authors = "Ruby (tizu), ElNico56"
+description = "Hex Casting, with a bit more accessibility sprinkled on top. (Forge port of the Fabric mod)"
+
+[[dependencies.hexcessible]]
+modId = "forge"
+mandatory = true
+versionRange = "[47,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.hexcessible]]
+modId = "minecraft"
+mandatory = true
+versionRange = "[1.20.1,1.21)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.hexcessible]]
+modId = "hexcasting"
+mandatory = true
+versionRange = "[0.11.2,0.12.0)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.hexcessible]]
+modId = "patchouli"
+mandatory = true
+versionRange = "[1.20.1-80,)"
+ordering = "NONE"
+side = "CLIENT"
+
+[[dependencies.hexcessible]]
+modId = "cloth_config"
+mandatory = true
+versionRange = "[11,)"
+ordering = "NONE"
+side = "CLIENT"

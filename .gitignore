@@ -1,0 +1,39 @@
+# ================= Gradle / ForgeGradle 构建产物 =================
+# Gradle 工作缓存(首次构建后自动生成)
+.gradle/
+# 编译输出(classes、jar、生成源码、报告等)
+build/
+# IDE 输出目录
+out/
+classes/
+bin/
+
+# ============ 本地开发运行数据(切勿上传) ============
+# Forge 开发环境运行目录:存档、世界、mods、崩溃报告、配置
+run/
+# 项目根目录日志
+logs/
+crash-reports/
+*.log
+
+# ============ 本地依赖 jar ============
+# 手动放入的 deobf mod jar 等;若确实需要提交本地依赖,删除下面这一行
+libs/
+
+# ================= IDE 配置文件 =================
+.idea/
+*.iml
+*.ipr
+*.iws
+.vscode/
+.classpath
+.project
+.settings/
+.factorypath
+.metadata/
+eclipse/
+
+# ================= 操作系统垃圾文件 =================
+.DS_Store
+Thumbs.db
+desktop.ini

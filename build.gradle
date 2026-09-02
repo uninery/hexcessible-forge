@@ -1,0 +1,182 @@
+buildscript {
+    repositories {
+        maven { url = 'https://maven.minecraftforge.net' }
+        maven {
+            url = 'https://repo.spongepowered.org/repository/maven-public/'
+            content { includeGroup "org.spongepowered" }
+        }
+        mavenCentral()
+    }
+    dependencies {
+        classpath group: 'net.minecraftforge.gradle', name: 'ForgeGradle', version: '6.0.+', changing: true
+        classpath 'org.spongepowered:mixingradle:0.7-SNAPSHOT'
+    }
+}
+
+plugins {
+    id 'java'
+    id 'maven-publish'
+}
+
+apply plugin: 'net.minecraftforge.gradle'
+apply plugin: 'org.spongepowered.mixin'
+
+version = project.mod_version
+group = project.maven_group
+
+base {
+    archivesName = project.archives_base_name
+}
+
+repositories {
+    mavenCentral()
+
+    // paucal, patchi, inline, hexcasting, hexdebug
+    maven { url = 'https://maven.blamejared.com' }
+    // cloth-config
+    maven { url = "https://maven.shedaniel.me/" }
+    // caelus
+    maven { url = "https://maven.theillusivec4.top" }
+    // kotlinforforge
+    maven {
+        name = 'Kotlin for Forge'
+        url = 'https://thedarkcolour.github.io/KotlinForForge/'
+        content { includeGroup "thedarkcolour" }
+    }
+}
+
+dependencies {
+    minecraft "net.minecraftforge:forge:${minecraft_version}-${forge_version}"
+
+    // ---- Hex Casting (Forge) ----
+    compileOnly fg.deobf("at.petra-k.hexcasting:hexcasting-forge-$minecraft_version:$hexcasting_version")
+    runtimeOnly fg.deobf("at.petra-k.hexcasting:hexcasting-forge-$minecraft_version:$hexcasting_version")
+
+    // ---- Patchouli (hex book reading + N-key docs) ----
+    compileOnly fg.deobf("vazkii.patchouli:Patchouli:$minecraft_version-$patchouli_version-FORGE")
+    runtimeOnly fg.deobf("vazkii.patchouli:Patchouli:$minecraft_version-$patchouli_version-FORGE")
+
+    // ---- Cloth Config / AutoConfig (config screen) ----
+    implementation fg.deobf("me.shedaniel.cloth:cloth-config-forge:$cloth_config_version")
+
+    // kotlin.Pair is used by DrawState#getStackMod; the stdlib itself is provided
+    // at runtime by Kotlin for Forge (required by hexcasting anyway).
+    compileOnly "org.jetbrains.kotlin:kotlin-stdlib:$kotlin_version"
+
+    // ---- Runtime-only deps required by hexcasting-forge's mods.toml ----
+    runtimeOnly fg.deobf("at.petra-k.paucal:paucal-forge-$minecraft_version:$paucal_version")
+    runtimeOnly fg.deobf("com.samsthenerd.inline:inline-forge:$minecraft_version-$inline_version")
+    runtimeOnly fg.deobf("top.theillusivec4.caelus:caelus-forge:$caelus_version")
+    runtimeOnly "thedarkcolour:kotlinforforge:$kotlinforforge_version"
+
+    annotationProcessor 'org.spongepowered:mixin:0.8.5:processor'
+}
+
+minecraft {
+    mappings channel: 'official', version: minecraft_version
+
+    runs {
+        client {
+            workingDirectory project.file('run')
+
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
+
+            mods {
+                create(mod_id) {
+                    source sourceSets.main
+                }
+            }
+        }
+
+        server {
+            workingDirectory project.file('run')
+
+            property 'mixin.env.remapRefMap', 'true'
+            property 'mixin.env.refMapRemappingFile', "${projectDir}/build/createSrgToMcp/output.srg"
+
+            mods {
+                create(mod_id) {
+                    source sourceSets.main
+                }
+            }
+        }
+    }
+}
+
+mixin {
+    add sourceSets.main, "hexcessible.mixins.refmap.json"
+    config "hexcessible.mixins.json"
+}
+
+// ---------------------------------------------------------------------------
+// Refmap handling for dev runs.
+//
+// The Mixin AP writes the refmap to build/tmp/compileJava/compileJava-refmap.json
+// and MixinGradle only copies it into the produced jar. Dev runs (runClient /
+// runServer) also need it on the classpath, otherwise injects into SRG-named
+// MC methods fail with "No refMap loaded".
+//
+// Additionally, the AP cannot map GuiSpellcasting#mouseMoved (the MCP mapping
+// data only lists that method under GuiEventListener, while the inject targets
+// the Kotlin override in GuiSpellcasting), so we patch the generated refmap to
+// add the missing entry. The SRG name m_94757_ is stable for 1.20.1.
+// ---------------------------------------------------------------------------
+// The Mixin AP writes its per-sourceSet refmap here; MixinGradle's
+// addMixinsToJar renames it into the jar, and we copy it into the resources
+// output so dev runs can load it too.
+def refmapTmp = file("$buildDir/tmp/compileJava/compileJava-refmap.json")
+
+tasks.register('patchRefmap') {
+    dependsOn compileJava
+    doLast {
+        if (!refmapTmp.exists()) {
+            throw new GradleException("Refmap not found at $refmapTmp -- did the Mixin annotation processor run?")
+        }
+        def slurper = new groovy.json.JsonSlurper()
+        def json = slurper.parse(refmapTmp)
+        def entry = 'Lat/petrak/hexcasting/client/gui/GuiSpellcasting;m_94757_(DD)V'
+        def mixinName = 'dev/tizu/hexcessible/mixin/DrawStateMixin'
+        if (!(json.mappings[mixinName].containsKey('mouseMoved'))) {
+            json.mappings[mixinName].mouseMoved = entry
+            json.data.searge[mixinName].mouseMoved = entry
+            refmapTmp.text = groovy.json.JsonOutput.prettyPrint(groovy.json.JsonOutput.toJson(json))
+        }
+    }
+}
+
+processResources {
+    dependsOn patchRefmap
+    from(refmapTmp) {
+        into '.'
+        rename { 'hexcessible.mixins.refmap.json' }
+    }
+    inputs.property "version", project.version
+    filesMatching("META-INF/mods.toml") {
+        expand "version": version
+    }
+}
+
+tasks.matching { it.name == 'addMixinsToJar' }.configureEach {
+    dependsOn 'patchRefmap'
+}
+
+// The refmap lands in the jar both via MixinGradle's addMixinsToJar (renamed)
+// and via our resources copy (which exists for dev runs); both are identical,
+// so dedupe.
+jar {
+    duplicatesStrategy = DuplicatesStrategy.EXCLUDE
+}
+
+tasks.withType(JavaCompile).configureEach {
+    it.options.encoding = 'UTF-8'
+    it.options.release = 17
+}
+
+java {
+    withSourcesJar()
+    sourceCompatibility = JavaVersion.VERSION_17
+    targetCompatibility = JavaVersion.VERSION_17
+}
+
+jar.finalizedBy('reobfJar')
