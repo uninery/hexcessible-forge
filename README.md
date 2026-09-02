@@ -91,14 +91,35 @@ the [JSON License](LICENSE) (MIT variant with the "Good, not Evil" clause).
 
 ## Building
 
-Requirements: JDK 17 (`JAVA_HOME`), network access for first build.
+Requirements: **JDK 17** (ForgeGradle 6 / Gradle 8.12.1 do not support newer
+JDKs) and network access for the first build.
+
+First check your Java version:
 
 ```bat
-set JAVA_HOME=D:\path\to\jdk17
+java -version
+```
+
+If it does not report 17, point the build at your JDK 17 installation. The
+path differs per machine — replace it with your own:
+
+```bat
+REM cmd
+set JAVA_HOME=D:\path\to\your\jdk17
 gradlew.bat build
 ```
 
-The built jar lands in `build/libs/hexcessible-0.3.1.jar`. To run a dev client:
+```powershell
+# PowerShell
+$env:JAVA_HOME='D:\path\to\your\jdk17'
+.\gradlew.bat build
+```
+
+If `java -version` already reports 17 (or `JAVA_HOME` already points at a
+JDK 17), you can run `gradlew.bat build` directly.
+
+The built jar lands in `build/libs/hexcessible-forge-0.3.1f1.jar`. To run a
+dev client:
 
 ```bat
 gradlew.bat runClient
