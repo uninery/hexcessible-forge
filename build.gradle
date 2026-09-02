@@ -164,6 +164,14 @@ tasks.matching { it.name == 'addMixinsToJar' }.configureEach {
 // The refmap lands in the jar both via MixinGradle's addMixinsToJar (renamed)
 // and via our resources copy (which exists for dev runs); both are identical,
 // so dedupe.
+// Ship the license inside every produced archive (main jar, sources jar, ...)
+// so the upstream copyright notice travels with each distributed copy, as the
+// JSON License requires ("...shall be included in all copies or substantial
+// portions of the Software").
+tasks.withType(Jar).configureEach {
+    from('LICENSE')
+}
+
 jar {
     duplicatesStrategy = DuplicatesStrategy.EXCLUDE
 }
