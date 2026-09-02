@@ -8,6 +8,12 @@ Hex Casting reference source: `HexMod-main` (0.11.4)
 
 The entire modification and porting work was done by DeepSeek-V4-Flash
 
+## License
+
+This is a source-derived port of [hexcessible](https://g.tizu.dev/hexcessible)
+by Ruby (`mods@tizu.dev`). The ported code retains the upstream license —
+the [JSON License](LICENSE) (MIT variant with the "Good, not Evil" clause).
+
 ## Port notes
 
 * Target: **Forge 1.20.1 (47.1.47)**, Java 17, official (Mojmap) mappings.
