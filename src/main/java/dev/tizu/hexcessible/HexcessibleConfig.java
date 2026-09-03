@@ -79,15 +79,6 @@ public class HexcessibleConfig implements ConfigData {
     public int bookX = -1;
     @ConfigEntry.Gui.Excluded
     public int bookY = -1;
-    @ConfigEntry.Gui.Excluded
-    /** "landing" or "entry" - which view the floating book was showing. */
-    public String bookKind = "landing";
-    @ConfigEntry.Gui.Excluded
-    /** Last viewed entry id (bookKind == "entry"). */
-    public String bookEntry = "";
-    @ConfigEntry.Gui.Excluded
-    /** Last viewed spread within that entry. */
-    public int bookSpread = 0;
 
     public static class Idle {
         @ConfigEntry.Gui.EnumHandler(option = EnumDisplayOption.BUTTON)

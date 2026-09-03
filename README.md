@@ -14,7 +14,7 @@ This is a source-derived port of [hexcessible](https://g.tizu.dev/hexcessible)
 by Ruby (`mods@tizu.dev`). The ported code retains the upstream license —
 the [JSON License](LICENSE) (MIT variant with the "Good, not Evil" clause).
 
-## Features added on top of the port (0.3.1.1f2)
+## Features added on top of the port (0.3.1.1f3)
 
 Three accessibility features were added to the spellcasting (pattern
 drawing) interface:
@@ -36,21 +36,28 @@ drawing) interface:
    hex book is shown **floating over the drawing interface** as a draggable
    window: fully interactive (flip pages, follow links, search, bookmarks),
    while the pattern grid around it keeps working. Drag it by its title strip,
+   with the middle mouse button anywhere, or by grabbing empty book space;
    close it with the ×, Esc, or the docs key. Exiting the drawing UI while the
-   book is open hides it; starting to draw again brings it back **still open,
-   at the remembered screen position and page** (also persisted across game
-   restarts). Implementation notes:
+   book is open hides it; starting to draw again brings it back **still open
+   at the remembered screen position** (persisted in the config). Page
+   position is remembered exactly like Patchouli remembers it for the real
+   book (its own browsing state), no extra "jump back to last entry" logic.
+   Implementation notes:
    * Patchouli navigation funnels through
      `BookContents#openLexiconGui`; while the overlay is active the
      `BookContentsNavMixin` reroutes it into the overlay instead of
      `Minecraft.setScreen`, and the previous book GUI is pushed onto
      Patchouli's own `guiStack`, so Back/links/history behave exactly like
      in the real book (including the page state Patchouli itself remembers).
-   * Each frame the book GUI is rendered into an off-screen
-     `RenderTarget` the size of the window (via the `BookOverlay`
-     controller) and only the region around the pages is copied back at the
-     floating position, so mouse coordinates map 1:1 onto the book's own
-     coordinate system.
+   * The book is drawn directly onto the casting screen, translated (and
+     zoom-scaled) to the floating window position. Rendering reuses
+     Patchouli's own page drawing (`drawBackgroundElements` /
+     `drawForegroundElements` / the widget list / tooltips, via the
+     `HexcessibleGuiBookAccessor` mixin) but skips the fullscreen
+     background, so the pattern grid is never dimmed or blurred behind the
+     book. Clicks over the book (including the page-turn/back buttons that
+     overhang its bottom edge) are fully consumed and never reach the
+     pattern grid.
 3. **Absolute direction drawing mode.** Upstream keyboard drawing is
    relative: each key is a turn relative to the previous stroke. In the new
    absolute mode every key means one **fixed screen direction** of the next
@@ -168,8 +175,8 @@ $env:JAVA_HOME='D:\path\to\your\jdk17'
 If `java -version` already reports 17 (or `JAVA_HOME` already points at a
 JDK 17), you can run `gradlew.bat build` directly.
 
-The built jar lands in `build/libs/hexcessible-forge-0.3.1.1f2.jar`. To run a
-dev client:
+The built jar lands in `build/libs/hexcessible-forge-1.20.1-0.3.1.1f3.jar`. To
+run a dev client:
 
 ```bat
 gradlew.bat runClient

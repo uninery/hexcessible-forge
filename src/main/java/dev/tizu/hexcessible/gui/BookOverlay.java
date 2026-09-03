@@ -15,10 +15,7 @@ import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.network.chat.Component;
-import net.minecraft.resources.ResourceLocation;
-import vazkii.patchouli.client.book.BookEntry;
 import vazkii.patchouli.client.book.gui.GuiBook;
-import vazkii.patchouli.client.book.gui.GuiBookEntry;
 import vazkii.patchouli.common.book.Book;
 import vazkii.patchouli.common.book.BookRegistry;
 
@@ -38,7 +35,9 @@ import vazkii.patchouli.common.book.BookRegistry;
  * <p>
  * The book survives cast-session boundaries: closing the casting interface
  * while the book is open just hides it and the next time casting starts the
- * book reappears at the remembered position, on the remembered page.
+ * book reappears at the remembered window position. Which page it shows is
+ * Patchouli's own book state (same as reopening the real book), so no extra
+ * "jump to last entry" tracking is done here.
  */
 public final class BookOverlay {
     private BookOverlay() {
@@ -50,6 +49,13 @@ public final class BookOverlay {
     private static final int MARGIN_RIGHT = 26;
     /** Height of the drag strip painted above the book. */
     private static final int STRIP_H = 13;
+    /**
+     * The prev/next-page and back buttons hang a few pixels below the book
+     * texture (bookTop + FULL_HEIGHT - 6 with height 10). Keep that overhang
+     * inside the book's click area so pressing it never leaks through to the
+     * pattern grid behind.
+     */
+    private static final int BOTTOM_PAD = 10;
     /** Pixels of mouse travel before a press on empty book space drags. */
     private static final int DRAG_THRESHOLD = 6;
 
@@ -64,6 +70,8 @@ public final class BookOverlay {
     private static boolean dragging;
     /** A left press on book space that may turn into a drag on movement. */
     private static boolean potentialDrag;
+    /** A press inside the book was consumed (release must not reach the UI). */
+    private static boolean pressConsumed;
     private static float grabDx, grabDy;
 
     // ------------------------------------------------------------------
@@ -171,9 +179,8 @@ public final class BookOverlay {
 
     /**
      * What to show when (re)opening: the book instance from this session if we
-     * have one (keeps the live page state), otherwise the persisted entry/spread
-     * from the config if it is still unlocked, otherwise wherever the book was
-     * last.
+     * have one (keeps the live page state), otherwise wherever Patchouli's own
+     * book state currently is (it natively remembers the last page/stack).
      */
     @Nullable
     private static GuiBook currentTarget() {
@@ -185,14 +192,6 @@ public final class BookOverlay {
         contents.checkValidCurrentEntry();
         if (book != null)
             return book;
-        var cfg = Hexcessible.cfg();
-        if ("entry".equals(cfg.bookKind) && cfg.bookEntry != null
-                && !cfg.bookEntry.isBlank()) {
-            var id = ResourceLocation.tryParse(cfg.bookEntry);
-            var entry = id == null ? null : contents.entries.get(id);
-            if (entry != null && !entry.isLocked())
-                return new GuiBookEntry(b, entry, clampSpread(entry, cfg.bookSpread));
-        }
         return contents.getCurrentGui();
     }
 
@@ -203,11 +202,6 @@ public final class BookOverlay {
             Hexcessible.LOGGER.error("Hex book {} not loaded; cannot float it",
                     BookEntries.BOOKID);
         return b;
-    }
-
-    private static int clampSpread(BookEntry entry, int spread) {
-        int max = Math.max(0, (entry.getPages().size() + 1) / 2 - 1);
-        return Math.max(0, Math.min(spread, max));
     }
 
     // ------------------------------------------------------------------
@@ -251,7 +245,6 @@ public final class BookOverlay {
             return;
         }
         book = gui;
-        recordBrowsingState();
         if (winX < 0)
             defaultPosition();
     }
@@ -311,8 +304,9 @@ public final class BookOverlay {
         if (book == null)
             return false;
         clampPosition();
+        // content plus the overhang of the bottom button row (prev/next/back)
         return mx >= winX && mx <= winX + contentW()
-                && my >= winY && my <= winY + contentH();
+                && my >= winY && my <= winY + contentH() + BOTTOM_PAD * scaleFactor;
     }
 
     private static boolean mouseInStrip(double mx, double my) {
@@ -340,12 +334,14 @@ public final class BookOverlay {
                     startDrag(mx, my);
                 }
             }
+            pressConsumed = true;
             return true;
         }
         if (mouseInContent(mx, my)) {
             if (button == 2) {
                 // middle mouse drags the window from anywhere
                 startDrag(mx, my);
+                pressConsumed = true;
                 return true;
             }
             if (button == 0 || button == 1 || button == 4 || button == 5) {
@@ -364,6 +360,7 @@ public final class BookOverlay {
                     Hexcessible.LOGGER.error("Floating book click failed", e);
                 }
             }
+            pressConsumed = true;
             return true;
         }
         return false;
@@ -406,11 +403,12 @@ public final class BookOverlay {
     public static boolean onMouseReleased() {
         if (!visible)
             return false;
-        var wasActive = dragging || potentialDrag;
+        var wasActive = dragging || potentialDrag || pressConsumed;
         if (dragging)
             persistState();
         dragging = false;
         potentialDrag = false;
+        pressConsumed = false;
         return wasActive;
     }
 
@@ -490,20 +488,6 @@ public final class BookOverlay {
     // Persistence
     // ------------------------------------------------------------------
 
-    private static void recordBrowsingState() {
-        var cfg = Hexcessible.cfg();
-        if (book instanceof GuiBookEntry entryGui) {
-            cfg.bookKind = "entry";
-            var id = entryGui.getEntry().getId();
-            cfg.bookEntry = id == null ? "" : id.toString();
-            cfg.bookSpread = entryGui.getSpread();
-        } else {
-            cfg.bookKind = "landing";
-            cfg.bookEntry = "";
-            cfg.bookSpread = 0;
-        }
-    }
-
     private static void persistState() {
         var cfg = Hexcessible.cfg();
         cfg.docsFloating = open;
@@ -511,7 +495,6 @@ public final class BookOverlay {
             cfg.bookX = Math.round(winX);
             cfg.bookY = Math.round(winY);
         }
-        recordBrowsingState();
         cfg.markDirty();
     }
 
