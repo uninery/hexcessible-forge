@@ -15,6 +15,7 @@ import dev.tizu.hexcessible.Hexcessible;
 import dev.tizu.hexcessible.accessor.CastRef;
 import dev.tizu.hexcessible.accessor.CastingInterfaceAccessor.State;
 import dev.tizu.hexcessible.entries.PatternEntries;
+import dev.tizu.hexcessible.keybinds.KeyBinds;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.inventory.tooltip.DefaultTooltipPositioner;
@@ -71,45 +72,38 @@ public final class AutoCompleting extends DrawState {
             return; // if no options are shown, no need to provide opt controls.
         lastInteractWasMouse = false;
         var ctrl = (modifiers & GLFW.GLFW_MOD_CONTROL) != 0;
-        switch (keyCode) {
-            case GLFW.GLFW_KEY_BACKSPACE:
-                if (ctrl) { // remove last word
-                    var words = query.split(" ");
-                    setQuery(Arrays.stream(words)
-                            .limit(words.length - 1l)
-                            .collect(Collectors.joining(" ")));
-                } else { // remove single character
-                    setQuery(query.isEmpty() ? ""
-                            : query.substring(0, query.length() - 1));
-                }
-                break;
-            case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_TAB:
-                if (unlocked.isEmpty())
-                    return;
-                var sig = unlocked.get(chosen).sig();
-                if (sig == null)
-                    return;
-                var dir = unlocked.get(chosen).dir();
-                nextState = new KeyboardDrawing(castref, start, sig, dir);
-                break;
-            case GLFW.GLFW_KEY_UP:
-                offsetChosen(-1);
-                break;
-            case GLFW.GLFW_KEY_DOWN:
-                offsetChosen(1);
-                break;
-            case GLFW.GLFW_KEY_LEFT:
-                offsetChosenDoc(-1);
-                break;
-            case GLFW.GLFW_KEY_RIGHT:
-                offsetChosenDoc(1);
-                break;
-            case GLFW.GLFW_KEY_E, GLFW.GLFW_KEY_F2:
-                if (keyCode == GLFW.GLFW_KEY_E && !ctrl)
-                    return;
+        if (keyCode == GLFW.GLFW_KEY_BACKSPACE) {
+            if (ctrl) { // remove last word
+                var words = query.split(" ");
+                setQuery(Arrays.stream(words)
+                        .limit(words.length - 1l)
+                        .collect(Collectors.joining(" ")));
+            } else { // remove single character
+                setQuery(query.isEmpty() ? ""
+                        : query.substring(0, query.length() - 1));
+            }
+        } else if (KeyBinds.keyMatches(KeyBinds.Action.CONFIRM, keyCode, modifiers)
+                || keyCode == GLFW.GLFW_KEY_KP_ENTER
+                || keyCode == GLFW.GLFW_KEY_TAB) {
+            if (unlocked.isEmpty())
+                return;
+            var sig = unlocked.get(chosen).sig();
+            if (sig == null)
+                return;
+            var dir = unlocked.get(chosen).dir();
+            nextState = new KeyboardDrawing(castref, start, sig, dir);
+        } else if (KeyBinds.keyMatches(KeyBinds.Action.SCROLL_UP, keyCode, modifiers)) {
+            offsetChosen(-1);
+        } else if (KeyBinds.keyMatches(KeyBinds.Action.SCROLL_DOWN, keyCode, modifiers)) {
+            offsetChosen(1);
+        } else if (KeyBinds.keyMatches(KeyBinds.Action.DEFS_LEFT, keyCode, modifiers)) {
+            offsetChosenDoc(-1);
+        } else if (KeyBinds.keyMatches(KeyBinds.Action.DEFS_RIGHT, keyCode, modifiers)) {
+            offsetChosenDoc(1);
+        } else if (KeyBinds.keyMatches(KeyBinds.Action.ALIAS, keyCode, modifiers)
+                || keyCode == GLFW.GLFW_KEY_F2) {
+            if (!unlocked.isEmpty())
                 nextState = new AliasChanging(castref, unlocked.get(chosen));
-                break;
-            default:
         }
     }
 
@@ -311,10 +305,12 @@ public final class AutoCompleting extends DrawState {
 
         keys.put("type", "search");
         if (!noDistract()) {
-            keys.put("tab/enter", "cast");
-            keys.put("wheel/up/down", "scroll");
-            keys.put("left/right", "scroll_definitions");
-            keys.put("ctrl-e", "alias");
+            keys.put(KeyBinds.label(KeyBinds.Action.CONFIRM) + "/tab", "cast");
+            keys.put("wheel/" + KeyBinds.label(KeyBinds.Action.SCROLL_UP) + "/"
+                    + KeyBinds.label(KeyBinds.Action.SCROLL_DOWN), "scroll");
+            keys.put(KeyBinds.label(KeyBinds.Action.DEFS_LEFT) + "/"
+                    + KeyBinds.label(KeyBinds.Action.DEFS_RIGHT), "scroll_definitions");
+            keys.put(KeyBinds.label(KeyBinds.Action.ALIAS), "alias");
         }
 
         return keys;

@@ -66,6 +66,29 @@ public class HexcessibleConfig implements ConfigData {
     /** <patternid>: <renamed> */
     public Map<String, String> patternAliases = Map.of();
 
+    // ---- Hexcessible port additions -----------------------------------
+    // Rebindable shortcut overrides; map of action name -> "c:<char>" or
+    // "k:<keycode>:<modmask>". Missing actions use the defaults (KeyBinds).
+    @ConfigEntry.Gui.Excluded
+    public Map<String, String> keybinds = Map.of();
+    @ConfigEntry.Gui.Excluded
+    /** Whether the floating hex book was open when the drawing UI last closed. */
+    public boolean docsFloating = false;
+    @ConfigEntry.Gui.Excluded
+    /** Last floating book position (-1 = default). */
+    public int bookX = -1;
+    @ConfigEntry.Gui.Excluded
+    public int bookY = -1;
+    @ConfigEntry.Gui.Excluded
+    /** "landing" or "entry" - which view the floating book was showing. */
+    public String bookKind = "landing";
+    @ConfigEntry.Gui.Excluded
+    /** Last viewed entry id (bookKind == "entry"). */
+    public String bookEntry = "";
+    @ConfigEntry.Gui.Excluded
+    /** Last viewed spread within that entry. */
+    public int bookSpread = 0;
+
     public static class Idle {
         @ConfigEntry.Gui.EnumHandler(option = EnumDisplayOption.BUTTON)
         public OptionalTooltip tooltip = OptionalTooltip.DESCRIPTIVE;
@@ -85,6 +108,9 @@ public class HexcessibleConfig implements ConfigData {
         public boolean keyHint = true;
         @ConfigEntry.Gui.Tooltip
         public boolean ghost = true;
+        @ConfigEntry.Gui.Tooltip
+        /** Absolute direction mode (keys map to fixed screen directions). */
+        public boolean absoluteMode = false;
     }
 
     public static class AutoComplete {

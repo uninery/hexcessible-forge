@@ -5,13 +5,12 @@ import java.util.List;
 import java.util.Map;
 
 import org.jetbrains.annotations.Nullable;
-import org.lwjgl.glfw.GLFW;
 
 import at.petrak.hexcasting.api.casting.math.HexPattern;
 import dev.tizu.hexcessible.Hexcessible;
-import dev.tizu.hexcessible.Utils;
 import dev.tizu.hexcessible.accessor.CastRef;
 import dev.tizu.hexcessible.entries.PatternEntries;
+import dev.tizu.hexcessible.keybinds.KeyBinds;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.world.phys.Vec2;
 
@@ -33,20 +32,27 @@ public final class Idling extends DrawState {
 
     @Override
     public void onCharType(char chr) {
-        if (Hexcessible.cfg().keyboardDraw.allow
-                && KeyboardDrawing.validSig.contains(chr))
-            nextState = new KeyboardDrawing(castref, List.of(Utils.angle(chr)));
+        if (!Hexcessible.cfg().keyboardDraw.allow)
+            return;
+        var abs = Hexcessible.cfg().keyboardDraw.absoluteMode;
+        var dir = KeyBinds.absoluteDirOf(chr);
+        if (abs && dir != null) {
+            nextState = new KeyboardDrawing(castref, dir);
+        } else if (!abs && KeyBinds.relativeAngleOf(chr) != null) {
+            nextState = new KeyboardDrawing(castref,
+                    List.of(KeyBinds.relativeAngleOf(chr)));
+        }
     }
 
     @Override
     public void onKeyPress(int keyCode, int modifiers) {
-        var ctrl = (modifiers & GLFW.GLFW_MOD_CONTROL) != 0;
-        if (keyCode == GLFW.GLFW_KEY_SPACE && ctrl
+        if (KeyBinds.keyMatches(KeyBinds.Action.AUTOCOMPLETE, keyCode, modifiers)
                 && Hexcessible.cfg().autoComplete.allow) {
             var pos = castref.pxToCoord(mousePos);
             nextState = new AutoCompleting(castref, pos);
         }
-        if (keyCode == GLFW.GLFW_KEY_E && ctrl && hoveredOverEntry != null)
+        if (KeyBinds.keyMatches(KeyBinds.Action.ALIAS, keyCode, modifiers)
+                && hoveredOverEntry != null)
             nextState = new AliasChanging(castref, hoveredOverEntry);
     }
 
@@ -86,18 +92,22 @@ public final class Idling extends DrawState {
         var keys = new HashMap<String, String>();
 
         if (Hexcessible.cfg().keyboardDraw.allow) {
-            var kbdChars = String.join("/", KeyboardDrawing.validSig
-                    .subList(0, KeyboardDrawing.validSig.size() / 2).stream()
-                    .map(Object::toString).toList());
-            keys.put("lmb/" + kbdChars, "draw_start");
+            var drawKeys = Hexcessible.cfg().keyboardDraw.absoluteMode
+                    ? KeyBinds.absoluteDrawLabel()
+                    : KeyBinds.relativeDrawLabel();
+            keys.put("lmb/" + drawKeys, "draw_start");
         } else {
             keys.put("lmb", "draw_start");
         }
 
         if (Hexcessible.cfg().autoComplete.allow)
-            keys.put("ctrl-space", "auto_complete");
+            keys.put(KeyBinds.label(KeyBinds.Action.AUTOCOMPLETE), "auto_complete");
         if (hoveredOverEntry != null)
-            keys.put("ctrl-e", "alias");
+            keys.put(KeyBinds.label(KeyBinds.Action.ALIAS), "alias");
+        if (Hexcessible.cfg().keyboardDraw.allow)
+            keys.put(KeyBinds.label(KeyBinds.Action.MODE_TOGGLE), "mode");
+        if (Hexcessible.cfg().keyDocs != dev.tizu.hexcessible.HexcessibleConfig.KeyDocs.OFF)
+            keys.put(KeyBinds.label(KeyBinds.Action.DOCS), "docs");
 
         return keys;
     }

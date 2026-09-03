@@ -14,6 +14,54 @@ This is a source-derived port of [hexcessible](https://g.tizu.dev/hexcessible)
 by Ruby (`mods@tizu.dev`). The ported code retains the upstream license —
 the [JSON License](LICENSE) (MIT variant with the "Good, not Evil" clause).
 
+## Features added on top of the port (0.3.1f1)
+
+Three accessibility features were added to the spellcasting (pattern
+drawing) interface:
+
+1. **Rebindable shortcuts.** Every Hexcessible shortcut is a named action
+   (relative draw directions, absolute draw directions, undo, confirm/cast,
+   move, rotate, mode toggle, floating book, autocomplete, alias, autocomplete
+   scrolling). Bindings are edited in the **keybindings screen**, opened from
+   the button in the **bottom-right corner of the spellcasting interface**
+   while drawing. Click a row, press the new key (Delete = restore default,
+   Esc = cancel). Letter shortcuts are layout-aware (they match the typed
+   character); everything else matches physical key + modifier state, like
+   vanilla keybinds. Persisted in the hexcessible config (`keybinds` map;
+   see `dev.tizu.hexcessible.keybinds.KeyBinds`). Fixed fallback triggers
+   (arrow keys for moving the drawing, Tab/Num-Enter/Space for confirming,
+   Backspace for undoing, F2 for aliasing) are kept.
+2. **Floating Hex Book.** The "docs" key (N by default, rebindable) no longer
+   swaps the game to Patchouli's fullscreen book screen. Instead the Patchouli
+   hex book is shown **floating over the drawing interface** as a draggable
+   window: fully interactive (flip pages, follow links, search, bookmarks),
+   while the pattern grid around it keeps working. Drag it by its title strip,
+   close it with the ×, Esc, or the docs key. Exiting the drawing UI while the
+   book is open hides it; starting to draw again brings it back **still open,
+   at the remembered screen position and page** (also persisted across game
+   restarts). Implementation notes:
+   * Patchouli navigation funnels through
+     `BookContents#openLexiconGui`; while the overlay is active the
+     `BookContentsNavMixin` reroutes it into the overlay instead of
+     `Minecraft.setScreen`, and the previous book GUI is pushed onto
+     Patchouli's own `guiStack`, so Back/links/history behave exactly like
+     in the real book (including the page state Patchouli itself remembers).
+   * Each frame the book GUI is rendered into an off-screen
+     `RenderTarget` the size of the window (via the `BookOverlay`
+     controller) and only the region around the pages is copied back at the
+     floating position, so mouse coordinates map 1:1 onto the book's own
+     coordinate system.
+3. **Absolute direction drawing mode.** Upstream keyboard drawing is
+   relative: each key is a turn relative to the previous stroke. In the new
+   absolute mode every key means one **fixed screen direction** of the next
+   stroke: `w` up-left, `e` up-right, `q` left, `a` down-left, `s` down-right,
+   `d` right (all rebindable). Pressing the key that points back at the
+   previously drawn spot **undoes the last stroke** (like mouse backtracking;
+   Backspace also works). The mode toggle key (`` ` `` by default, shown in
+   the bottom-left hints) switches between relative and absolute; the last
+   mode is remembered (config `keyboardDraw.absoluteMode`), and toggling is
+   allowed whenever nothing has been typed yet.
+
 ## Port notes
 
 * Target: **Forge 1.20.1 (47.1.47)**, Java 17, official (Mojmap) mappings.
@@ -23,7 +71,9 @@ the [JSON License](LICENSE) (MIT variant with the "Good, not Evil" clause).
   the compiled `0.11.4` Forge jar (`GuiSpellcasting`, `RenderLib`,
   `ClientRenderHelper`, `ResolvedPattern`, `MsgNewSpellPatternC2S`, …).
 * Patchouli Forge `1.20.1-84-FORGE` is used for the hex book integration
-  (`BookEntries`, N-key docs), same as the Fabric build's `84-FABRIC`.
+  (`BookEntries`, and the floating book overlay described above — a
+  `BookContents` mixin reroutes Patchouli navigation into a draggable
+  overlay window while the casting UI is open).
 * Config uses Cloth Config's **AutoConfig** (identical to the Fabric build);
   the ModMenu entry point is replaced with a Forge
   `ConfigScreenHandler.CONFIG_SCREEN_FACTORY` extension point
@@ -178,12 +228,14 @@ hexcessible only uses standard `GuiGraphics`/`Font` calls.
 ```
 src/main/java/dev/tizu/hexcessible/
 ├── Hexcessible.java            – constants/logging (unchanged)
-├── HexcessibleConfig.java      – AutoConfig (unchanged)
+├── HexcessibleConfig.java      – AutoConfig (+ new features' persisted state)
 ├── HexcessibleForge.java       – Forge @Mod entrypoint + config screen (new)
-├── Utils.java                  – ported
+├── Utils.java                  – ported (+ angle-from-direction helpers)
 ├── accessor/                   – CastRef, CastingInterfaceAccessor (reflection), DrawStateMixinAccessor
-├── drawstate/                  – Idling, MouseDrawing, KeyboardDrawing, AutoCompleting, AliasChanging, DrawState
+├── drawstate/                  – Idling, MouseDrawing, KeyboardDrawing (relative+absolute modes), AutoCompleting, AliasChanging, DrawState
 ├── entries/                    – PatternEntries, BookEntries
+├── gui/                        – BookOverlay (floating book), KeyConfigScreen (new)
+├── keybinds/                   – KeyBinds: the rebindable action registry (new)
 ├── smartsig/                   – Number, Bookkeeper, Escape, Hexical/HexThings/Overevaluate/ComplexHex conditionals
-└── mixin/                      – 11 client mixins (hexdebug interop dropped)
+└── mixin/                      – 11 client mixins (+ BookContentsNavMixin, KeyDocsScreenMixin removed)
 ```

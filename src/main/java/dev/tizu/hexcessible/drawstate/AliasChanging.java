@@ -10,6 +10,7 @@ import org.lwjgl.glfw.GLFW;
 import dev.tizu.hexcessible.Hexcessible;
 import dev.tizu.hexcessible.accessor.CastRef;
 import dev.tizu.hexcessible.entries.PatternEntries;
+import dev.tizu.hexcessible.keybinds.KeyBinds;
 import net.minecraft.ChatFormatting;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
@@ -58,26 +59,24 @@ public final class AliasChanging extends DrawState {
     @Override
     public void onKeyPress(int keyCode, int modifiers) {
         var ctrl = (modifiers & GLFW.GLFW_MOD_CONTROL) != 0;
-        switch (keyCode) {
-            case GLFW.GLFW_KEY_BACKSPACE:
-                if (ctrl) { // remove last word
-                    var words = alias.split(" ");
-                    alias = Arrays.stream(words)
-                            .limit(words.length - 1l)
-                            .collect(Collectors.joining(" "));
-                } else { // remove single character
-                    alias = alias.isEmpty() ? ""
-                            : alias.substring(0, alias.length() - 1);
-                }
-                break;
-            case GLFW.GLFW_KEY_ENTER, GLFW.GLFW_KEY_KP_ENTER, GLFW.GLFW_KEY_TAB:
-                var map = new HashMap<>(Hexcessible.cfg().patternAliases);
-                map.put(id, alias.isBlank() ? original : alias.trim());
-                Hexcessible.cfg().patternAliases = map;
-                Hexcessible.cfg().markDirty();
-                requestExit();
-                break;
-            default:
+        if (keyCode == GLFW.GLFW_KEY_BACKSPACE) {
+            if (ctrl) { // remove last word
+                var words = alias.split(" ");
+                alias = Arrays.stream(words)
+                        .limit(words.length - 1l)
+                        .collect(Collectors.joining(" "));
+            } else { // remove single character
+                alias = alias.isEmpty() ? ""
+                        : alias.substring(0, alias.length() - 1);
+            }
+        } else if (KeyBinds.keyMatches(KeyBinds.Action.CONFIRM, keyCode, modifiers)
+                || keyCode == GLFW.GLFW_KEY_KP_ENTER
+                || keyCode == GLFW.GLFW_KEY_TAB) {
+            var map = new HashMap<>(Hexcessible.cfg().patternAliases);
+            map.put(id, alias.isBlank() ? original : alias.trim());
+            Hexcessible.cfg().patternAliases = map;
+            Hexcessible.cfg().markDirty();
+            requestExit();
         }
     }
 
@@ -85,7 +84,8 @@ public final class AliasChanging extends DrawState {
     public Map<String, String> getHints() {
         var keys = new HashMap<String, String>();
 
-        keys.put("tab/enter", alias.isBlank() ? "alias_off" : "alias");
+        keys.put(KeyBinds.label(KeyBinds.Action.CONFIRM) + "/tab",
+                alias.isBlank() ? "alias_off" : "alias");
 
         return keys;
     }

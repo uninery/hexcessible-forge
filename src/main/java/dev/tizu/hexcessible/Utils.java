@@ -101,6 +101,12 @@ public class Utils {
         return HexDir.values();
     }
 
+    /** The relative turn (HexAngle) that rotates {@code from} into {@code to}. */
+    public static HexAngle angleFromTo(HexDir from, HexDir to) {
+        return HexAngle.values()[Math.floorMod(to.ordinal() - from.ordinal(),
+                HexAngle.values().length)];
+    }
+
     public static HexDir[] hexDirs(HexDir start) {
         var dirs = new HexDir[HexDir.values().length];
         for (int i = 0; i < dirs.length; i++)
