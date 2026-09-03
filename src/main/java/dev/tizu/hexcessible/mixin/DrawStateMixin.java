@@ -97,10 +97,8 @@ public class DrawStateMixin implements DrawStateMixinAccessor {
     @Inject(method = "mouseDragged", at = @At("HEAD"), cancellable = true)
     private void mouseDragged(double mx, double my, int button, double dx, double dy,
             CallbackInfoReturnable<Boolean> info) {
-        if (BookOverlay.isDragging()) {
-            BookOverlay.onMouseMoved(mx, my);
+        if (BookOverlay.onMouseMoved(mx, my))
             info.setReturnValue(true);
-        }
     }
 
     @Inject(at = @At("HEAD"), method = "mouseScrolled", cancellable = true)

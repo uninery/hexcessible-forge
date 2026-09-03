@@ -14,7 +14,7 @@ This is a source-derived port of [hexcessible](https://g.tizu.dev/hexcessible)
 by Ruby (`mods@tizu.dev`). The ported code retains the upstream license —
 the [JSON License](LICENSE) (MIT variant with the "Good, not Evil" clause).
 
-## Features added on top of the port (0.3.1f2)
+## Features added on top of the port (0.3.1f3)
 
 Three accessibility features were added to the spellcasting (pattern
 drawing) interface:

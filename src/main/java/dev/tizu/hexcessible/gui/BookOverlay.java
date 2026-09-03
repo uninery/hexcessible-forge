@@ -1,16 +1,6 @@
 package dev.tizu.hexcessible.gui;
 
-import java.util.List;
-
 import org.jetbrains.annotations.Nullable;
-
-import com.mojang.blaze3d.pipeline.RenderTarget;
-import com.mojang.blaze3d.pipeline.TextureTarget;
-import com.mojang.blaze3d.systems.RenderSystem;
-import com.mojang.blaze3d.vertex.BufferUploader;
-import com.mojang.blaze3d.vertex.DefaultVertexFormat;
-import com.mojang.blaze3d.vertex.Tesselator;
-import com.mojang.blaze3d.vertex.VertexFormat;
 
 import dev.tizu.hexcessible.Hexcessible;
 import dev.tizu.hexcessible.HexcessibleConfig;
@@ -23,9 +13,7 @@ import dev.tizu.hexcessible.mixin.HexcessibleGuiBookAccessor;
 import dev.tizu.hexcessible.mixin.HexcessibleScreenAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
-import net.minecraft.client.gui.screens.Screen;
-import net.minecraft.client.renderer.GameRenderer;
-import net.minecraft.client.renderer.MultiBufferSource;
+import net.minecraft.client.gui.components.Renderable;
 import net.minecraft.network.chat.Component;
 import net.minecraft.resources.ResourceLocation;
 import vazkii.patchouli.client.book.BookEntry;
@@ -38,12 +26,13 @@ import vazkii.patchouli.common.book.BookRegistry;
  * Floating Patchouli hex book shown over the spellcasting interface.
  *
  * <p>
- * While it is open, the book GUI that Patchouli would normally show as a
- * full-screen {@link Screen} is instead installed here (see
- * {@link #navigateTo}) and rendered every frame into an off-screen
- * {@link RenderTarget} the size of the window. Only the region around the
- * book pages is then copied back onto the casting screen at a user-draggable
- * position, so the book stays fully interactive (page flips, links, search,
+ * While it is open, the Patchouli book GUI that would normally take over the
+ * screen is installed here (see {@link #navigateTo}) and rendered directly
+ * onto the casting screen, translated to the user-draggable floating window
+ * position. Rendering re-uses Patchouli's own page-drawing methods
+ * ({@link HexcessibleGuiBookAccessor}) but skips the full-screen background,
+ * so no dim/overlay covers the pattern grid and no off-screen render target
+ * is needed. The book stays fully interactive (page flips, links, search,
  * bookmarks, ...) while the pattern grid around it keeps working.
  *
  * <p>
@@ -55,11 +44,14 @@ public final class BookOverlay {
     private BookOverlay() {
     }
 
-    /** Extra columns of the book texture we crop around (page margin). */
+    /** Extra columns of the book window around the texture (page-turn
+     *  buttons on the left, bookmarks/mark-read on the right). */
     private static final int MARGIN_LEFT = 8;
     private static final int MARGIN_RIGHT = 26;
     /** Height of the drag strip painted above the book. */
     private static final int STRIP_H = 13;
+    /** Pixels of mouse travel before a press on empty book space drags. */
+    private static final int DRAG_THRESHOLD = 6;
 
     private static GuiBook book;
     private static boolean open;
@@ -68,12 +60,11 @@ public final class BookOverlay {
     private static float winY = -1;
     private static float scaleFactor = 1f;
 
+    /** Dragging the window (strip grab, middle-mouse, or empty-space drag). */
     private static boolean dragging;
-    private static float dragDx, dragDy;
-
-    private static RenderTarget fbo;
-    private static int fboW = -1;
-    private static int fboH = -1;
+    /** A left press on book space that may turn into a drag on movement. */
+    private static boolean potentialDrag;
+    private static float grabDx, grabDy;
 
     // ------------------------------------------------------------------
     // State
@@ -155,6 +146,8 @@ public final class BookOverlay {
             return;
         open = false;
         visible = false;
+        dragging = false;
+        potentialDrag = false;
         persistState();
     }
 
@@ -251,10 +244,7 @@ public final class BookOverlay {
         try {
             gui.init(mc, mc.getWindow().getGuiScaledWidth(),
                     mc.getWindow().getGuiScaledHeight());
-            scaleFactor = ((HexcessibleGuiBookAccessor) (Object) gui)
-                    .hexcessible$scaleFactor();
-            if (scaleFactor <= 0)
-                scaleFactor = 1f;
+            scaleFactor = readScaleFactor(gui);
             gui.onFirstOpened();
         } catch (Throwable e) {
             Hexcessible.LOGGER.error("Failed to init book gui {} for overlay", gui, e);
@@ -264,6 +254,16 @@ public final class BookOverlay {
         recordBrowsingState();
         if (winX < 0)
             defaultPosition();
+    }
+
+    private static float readScaleFactor(GuiBook gui) {
+        try {
+            var k = ((HexcessibleGuiBookAccessor) (Object) gui).hexcessible$scaleFactor();
+            return k > 0 ? k : 1f;
+        } catch (Throwable e) {
+            Hexcessible.LOGGER.error("Failed to read the book zoom", e);
+            return 1f;
+        }
     }
 
     // ------------------------------------------------------------------
@@ -307,20 +307,6 @@ public final class BookOverlay {
                 Math.min(winY, Math.max(STRIP_H + 2, h - ch - 2)));
     }
 
-    /** Where the book was rendered inside the off-screen buffer. */
-    private static float[] cropRect() {
-        var w = Minecraft.getInstance().getWindow().getGuiScaledWidth();
-        var h = Minecraft.getInstance().getWindow().getGuiScaledHeight();
-        var x0 = (book.bookLeft - MARGIN_LEFT) * scaleFactor;
-        var y0 = book.bookTop * scaleFactor;
-        var x1 = x0 + contentW();
-        var y1 = y0 + contentH();
-        // The crop may extend past the buffer (zoom) -- clip it.
-        x1 = Math.min(x1, w);
-        y1 = Math.min(y1, h);
-        return new float[] { x0, y0, x1, y1 };
-    }
-
     private static boolean mouseInContent(double mx, double my) {
         if (book == null)
             return false;
@@ -351,19 +337,29 @@ public final class BookOverlay {
                 if (mx >= closeZone) {
                     close();
                 } else {
-                    dragging = true;
-                    dragDx = (float) (mx - winX);
-                    dragDy = (float) (my - winY);
+                    startDrag(mx, my);
                 }
             }
             return true;
         }
         if (mouseInContent(mx, my)) {
-            if (button == 0 || button == 1 || button == 2) {
+            if (button == 2) {
+                // middle mouse drags the window from anywhere
+                startDrag(mx, my);
+                return true;
+            }
+            if (button == 0 || button == 1 || button == 4 || button == 5) {
                 var vx = toVirtualX(mx);
                 var vy = toVirtualY(my);
                 try {
-                    book.mouseClickedScaled(vx, vy, button);
+                    var consumed = book.mouseClickedScaled(vx, vy, button);
+                    if (button == 0 && !consumed) {
+                        // nothing interactive was pressed: dragging by empty
+                        // book space is allowed if the mouse moves a bit
+                        potentialDrag = true;
+                        grabDx = (float) (mx - winX);
+                        grabDy = (float) (my - winY);
+                    }
                 } catch (Throwable e) {
                     Hexcessible.LOGGER.error("Floating book click failed", e);
                 }
@@ -373,31 +369,49 @@ public final class BookOverlay {
         return false;
     }
 
-    private static double toVirtualX(double mx) {
-        return (book.bookLeft - MARGIN_LEFT) + (mx - winX) / scaleFactor;
+    private static void startDrag(double mx, double my) {
+        dragging = true;
+        potentialDrag = false;
+        grabDx = (float) (mx - winX);
+        grabDy = (float) (my - winY);
     }
 
-    private static double toVirtualY(double my) {
-        return book.bookTop + (my - winY) / scaleFactor;
-    }
-
-    /** Moves the window while dragging; true if consumed. */
+    /**
+     * Mouse movement/drag while a button may be held. Returns true if the
+     * overlay consumed the event (window drag in progress or started).
+     */
     public static boolean onMouseMoved(double mx, double my) {
-        if (!visible || !dragging || book == null)
+        if (!visible || book == null)
             return false;
-        winX = (float) (mx - dragDx);
-        winY = (float) (my - dragDy);
-        clampPosition();
-        return true;
+        if (dragging) {
+            winX = (float) (mx - grabDx);
+            winY = (float) (my - grabDy);
+            clampPosition();
+            return true;
+        }
+        if (potentialDrag
+                && Math.abs(mx - winX - grabDx) + Math.abs(my - winY - grabDy)
+                        > DRAG_THRESHOLD) {
+            dragging = true;
+            potentialDrag = false;
+            winX = (float) (mx - grabDx);
+            winY = (float) (my - grabDy);
+            clampPosition();
+            return true;
+        }
+        return false;
     }
 
-    /** Ends a window drag; true if there was one. */
+    /** Ends a press/drag; true if there was one (consume the release). */
     public static boolean onMouseReleased() {
-        if (!visible || !dragging)
+        if (!visible)
             return false;
+        var wasActive = dragging || potentialDrag;
+        if (dragging)
+            persistState();
         dragging = false;
-        persistState();
-        return true;
+        potentialDrag = false;
+        return wasActive;
     }
 
     /** Wheel over the book flips pages; true if consumed. */
@@ -414,6 +428,14 @@ public final class BookOverlay {
             Hexcessible.LOGGER.error("Floating book scroll failed", e);
         }
         return true;
+    }
+
+    private static double toVirtualX(double mx) {
+        return (book.bookLeft - MARGIN_LEFT) + (mx - winX) / scaleFactor;
+    }
+
+    private static double toVirtualY(double my) {
+        return book.bookTop + (my - winY) / scaleFactor;
     }
 
     /**
@@ -497,96 +519,75 @@ public final class BookOverlay {
     // Rendering
     // ------------------------------------------------------------------
 
-    /** Renders the floating book over the host screen (call at end of frame). */
+    /**
+     * Renders the floating book over the host screen (call at end of frame).
+     * The book content itself is drawn by {@link #renderWindowed}, which
+     * reuses Patchouli's page drawing but never paints its fullscreen
+     * background, so nothing dims or blurs the casting screen.
+     */
     public static void render(GuiGraphics ctx, int mx, int my, float pticks) {
         if (!visible || book == null)
             return;
-        var mc = Minecraft.getInstance();
         try {
             clampPosition();
-            ensureFbo(mc);
-            // 1) paint the book GUI into the off-screen buffer
-            fbo.bindWrite(false);
-            fbo.setClearColor(0f, 0f, 0f, 0f);
-            fbo.clear(Minecraft.ON_OSX);
-
-            var bookGraphics = new GuiGraphics(mc,
-                    MultiBufferSource.immediate(Tesselator.getInstance().getBuilder()));
-            var crop = cropRect();
-            // mouse coords as if the book were fullscreen, where it was rendered
-            var fx = (int) (crop[0] + (mx - winX));
-            var fy = (int) (crop[1] + (my - winY));
-            book.render(bookGraphics, fx, fy, pticks);
-            bookGraphics.flush();
-
-            mc.getMainRenderTarget().bindWrite(false);
-
-            // 2) copy the book region back onto the casting screen
-            blitCrop(ctx, crop);
-            // 3) window chrome (drag strip, close button)
+            scaleFactor = readScaleFactor(book);
+            drawBackdrops(ctx);
+            renderWindowed(ctx, mx, my, pticks);
             drawChrome(ctx, mx, my);
         } catch (Throwable e) {
             Hexcessible.LOGGER.error("Failed to render floating book", e);
-            mc.getMainRenderTarget().bindWrite(false);
         }
     }
 
-    private static void ensureFbo(Minecraft mc) {
-        var w = mc.getWindow().getWidth();
-        var h = mc.getWindow().getHeight();
-        if (fbo == null || fboW != w || fboH != h) {
-            if (fbo != null)
-                fbo.destroyBuffers();
-            fbo = new TextureTarget(w, h, true, Minecraft.ON_OSX);
-            fboW = w;
-            fboH = h;
-        }
+    /** Dark backdrops for the columns beside the book texture. */
+    private static void drawBackdrops(GuiGraphics ctx) {
+        var k = scaleFactor;
+        var y0 = (int) winY;
+        var y1 = (int) (winY + contentH());
+        var leftEnd = (int) (winX + MARGIN_LEFT * k);
+        var rightStart = (int) (winX + (MARGIN_LEFT + GuiBook.FULL_WIDTH) * k);
+        var rightEnd = (int) (winX + contentW());
+        ctx.fill((int) winX, y0, leftEnd, y1, 0xC0_101018);
+        ctx.fill(rightStart, y0, rightEnd, y1, 0xC0_101018);
     }
 
-    private static void blitCrop(GuiGraphics ctx, float[] crop) {
-        var mc = Minecraft.getInstance();
-        var guiScale = mc.getWindow().getGuiScale();
-        // source region in physical pixels of the fbo (measured from the top)
-        float sx0 = crop[0] * (float) guiScale;
-        float sy0 = crop[1] * (float) guiScale;
-        float sx1 = crop[2] * (float) guiScale;
-        float sy1 = crop[3] * (float) guiScale;
-        sx0 = Math.max(0, sx0);
-        sy0 = Math.max(0, sy0);
-        sx1 = Math.min(fboW, sx1);
-        sy1 = Math.min(fboH, sy1);
-        if (sx1 <= sx0 || sy1 <= sy0)
+    /**
+     * Draws the Patchouli book GUI windowed at {@link #winX}/{@link #winY}.
+     * Mirrors {@code GuiBook#render} + {@code drawScreenAfterScale}, but the
+     * pose is translated/scaled so the book lands in the floating window and
+     * the fullscreen background pass is skipped. Mouse coordinates passed to
+     * the book are converted to its own (virtual) coordinate space.
+     */
+    public static void renderWindowed(GuiGraphics ctx, int mx, int my, float pticks) {
+        var gui = book;
+        if (gui == null)
             return;
-        float fw = fboW;
-        float fh = fboH;
-        // Framebuffer rows are stored bottom-up (v=0 is the bottom row), so
-        // content that was at crop height y sits at v = 1 - y/fh.
-        float u0 = sx0 / fw;
-        float u1 = sx1 / fw;
-        float v0 = 1f - sy0 / fh; // v at the crop's top
-        float v1 = 1f - sy1 / fh; // v at the crop's bottom
-
-        float destX0 = winX + (sx0 / (float) guiScale - crop[0]);
-        float destY0 = winY + (sy0 / (float) guiScale - crop[1]);
-        float destX1 = winX + (sx1 / (float) guiScale - crop[0]);
-        float destY1 = winY + (sy1 / (float) guiScale - crop[1]);
-
-        RenderSystem.enableBlend();
-        RenderSystem.defaultBlendFunc();
-        RenderSystem.disableDepthTest();
-        RenderSystem.setShaderColor(1f, 1f, 1f, 1f);
-        RenderSystem.setShader(GameRenderer::getPositionTexShader);
-        RenderSystem.setShaderTexture(0, fbo.getColorTextureId());
-        var m = ctx.pose().last().pose();
-        var bb = Tesselator.getInstance().getBuilder();
-        bb.begin(VertexFormat.Mode.QUADS, DefaultVertexFormat.POSITION_TEX);
-        bb.vertex(m, destX0, destY0, 0).uv(u0, v0).endVertex();
-        bb.vertex(m, destX0, destY1, 0).uv(u0, v1).endVertex();
-        bb.vertex(m, destX1, destY1, 0).uv(u1, v1).endVertex();
-        bb.vertex(m, destX1, destY0, 0).uv(u1, v0).endVertex();
-        BufferUploader.drawWithShader(bb.end());
-        RenderSystem.enableDepthTest();
-        RenderSystem.disableBlend();
+        var k = scaleFactor;
+        // window content left/top correspond to bookLeft - MARGIN_LEFT and
+        // bookTop in the book's virtual coordinate space
+        float shiftX = winX - k * (gui.bookLeft - MARGIN_LEFT);
+        float shiftY = winY - k * gui.bookTop;
+        float vmx = (mx - shiftX) / k;
+        float vmy = (my - shiftY) / k;
+        var acc = (HexcessibleGuiBookAccessor) (Object) gui;
+        var pose = ctx.pose();
+        pose.pushPose();
+        pose.translate(shiftX, shiftY, 0f);
+        pose.scale(k, k, 1f);
+        acc.hexcessible$resetTooltip();
+        ctx.setColor(1f, 1f, 1f, 1f);
+        // the book texture and the page content live at bookLeft/bookTop
+        pose.pushPose();
+        pose.translate(gui.bookLeft, gui.bookTop, 0f);
+        acc.hexcessible$drawBackgroundElements(ctx, (int) vmx, (int) vmy, pticks);
+        acc.hexcessible$drawForegroundElements(ctx, (int) vmx, (int) vmy, pticks);
+        pose.popPose();
+        // widgets (buttons, bookmarks, search box) are positioned in the
+        // virtual screen space
+        for (Renderable renderable : gui.renderables)
+            renderable.render(ctx, (int) vmx, (int) vmy, pticks);
+        acc.hexcessible$drawTooltip(ctx, (int) vmx, (int) vmy);
+        pose.popPose();
     }
 
     private static void drawChrome(GuiGraphics ctx, int mx, int my) {
