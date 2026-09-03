@@ -503,15 +503,19 @@ public final class BookOverlay {
     // ------------------------------------------------------------------
 
     /**
-     * Renders the floating book over the host screen (call at end of frame).
-     * The book content itself is drawn by {@link #renderWindowed}, which
-     * reuses Patchouli's page drawing but never paints its fullscreen
-     * background, so nothing dims or blurs the casting screen.
+     * Renders the floating Hex Notebook over the host screen (call at the very
+     * end of the screen pass). The book content itself is drawn by
+     * {@link #renderWindowed}, which reuses Patchouli's page drawing but never
+     * paints its fullscreen background, so nothing dims or blurs the casting
+     * screen. Everything buffered earlier in the frame (text/tooltips of the
+     * drawing interface) is flushed first, so it can never paint over the
+     * notebook window.
      */
     public static void render(GuiGraphics ctx, int mx, int my, float pticks) {
         if (!visible || book == null)
             return;
         try {
+            ctx.flush();
             clampPosition();
             scaleFactor = readScaleFactor(book);
             drawBackdrops(ctx);
