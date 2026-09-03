@@ -1,7 +1,5 @@
 package dev.tizu.hexcessible.gui;
 
-import java.lang.invoke.MethodHandle;
-import java.lang.invoke.MethodHandles;
 import java.util.List;
 
 import org.jetbrains.annotations.Nullable;
@@ -21,6 +19,8 @@ import dev.tizu.hexcessible.drawstate.Idling;
 import dev.tizu.hexcessible.drawstate.KeyboardDrawing;
 import dev.tizu.hexcessible.drawstate.MouseDrawing;
 import dev.tizu.hexcessible.entries.BookEntries;
+import dev.tizu.hexcessible.mixin.HexcessibleGuiBookAccessor;
+import dev.tizu.hexcessible.mixin.HexcessibleScreenAccessor;
 import net.minecraft.client.Minecraft;
 import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
@@ -74,27 +74,6 @@ public final class BookOverlay {
     private static RenderTarget fbo;
     private static int fboW = -1;
     private static int fboH = -1;
-
-    private static MethodHandle screenChildren;
-    private static MethodHandle screenNarratables;
-    private static MethodHandle screenInitialized;
-    private static MethodHandle guiBookScaleFactor;
-
-    static {
-        try {
-            var priv = MethodHandles.privateLookupIn(Screen.class,
-                    MethodHandles.lookup());
-            screenChildren = priv.findGetter(Screen.class, "children", List.class);
-            screenNarratables = priv.findGetter(Screen.class, "narratables", List.class);
-            screenInitialized = priv.findSetter(Screen.class, "initialized", boolean.class);
-            var privBook = MethodHandles.privateLookupIn(GuiBook.class,
-                    MethodHandles.lookup());
-            guiBookScaleFactor = privBook.findGetter(GuiBook.class, "scaleFactor",
-                    float.class);
-        } catch (NoSuchFieldException | IllegalAccessException e) {
-            throw new ExceptionInInitializerError(e);
-        }
-    }
 
     // ------------------------------------------------------------------
     // State
@@ -259,17 +238,21 @@ public final class BookOverlay {
         try {
             // Make this instance behave like a freshly shown screen: drop old
             // widgets, then let the vanilla Screen.init() bootstrap run.
-            ((List<?>) screenChildren.invoke(gui)).clear();
-            ((List<?>) screenNarratables.invoke(gui)).clear();
+            // (Accessors go through the refmap, so this also works on the
+            // SRG-obfuscated production Minecraft.)
+            var accessor = (HexcessibleScreenAccessor) (Object) gui;
+            accessor.hexcessible$children().clear();
+            accessor.hexcessible$narratables().clear();
             gui.renderables.clear();
-            screenInitialized.invoke(gui, false);
+            accessor.hexcessible$setInitialized(false);
         } catch (Throwable e) {
             Hexcessible.LOGGER.error("Failed to reset book gui {} for overlay", gui, e);
         }
         try {
             gui.init(mc, mc.getWindow().getGuiScaledWidth(),
                     mc.getWindow().getGuiScaledHeight());
-            scaleFactor = (float) guiBookScaleFactor.invoke(gui);
+            scaleFactor = ((HexcessibleGuiBookAccessor) (Object) gui)
+                    .hexcessible$scaleFactor();
             if (scaleFactor <= 0)
                 scaleFactor = 1f;
             gui.onFirstOpened();

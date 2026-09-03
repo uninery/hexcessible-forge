@@ -9,6 +9,8 @@
         "DrawStateScreenMixin",
         "DrawStateParentElemMixin",
         "BookContentsNavMixin",
+        "HexcessibleScreenAccessor",
+        "HexcessibleGuiBookAccessor",
         "FloatiesMixin",
         "DimmedMixin",
         "PerWorldLearnMixin",
