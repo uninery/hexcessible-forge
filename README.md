@@ -14,7 +14,7 @@ This is a source-derived port of [hexcessible](https://g.tizu.dev/hexcessible)
 by Ruby (`mods@tizu.dev`). The ported code retains the upstream license —
 the [JSON License](LICENSE) (MIT variant with the "Good, not Evil" clause).
 
-## Features added on top of the port (0.3.1.1f5)
+## Features added on top of the port (0.3.1.1f6)
 
 Three accessibility features were added to the spellcasting (pattern
 drawing) interface:
@@ -37,7 +37,8 @@ drawing) interface:
    window: fully interactive (flip pages, follow links, search, bookmarks),
    while the pattern grid around it keeps working. Drag it by its title strip,
    with the middle mouse button anywhere, or by grabbing empty book space;
-   close it with the ×, Esc, or the docs key. Exiting the drawing UI while the
+   close it with the × or the docs key (Esc only exits the drawing
+   interface and never closes the notebook). Exiting the drawing UI while the
    book is open hides it; starting to draw again brings it back **still open
    at the remembered screen position** (persisted in the config). Page
    position is remembered exactly like Patchouli remembers it for the real
@@ -175,7 +176,7 @@ $env:JAVA_HOME='D:\path\to\your\jdk17'
 If `java -version` already reports 17 (or `JAVA_HOME` already points at a
 JDK 17), you can run `gradlew.bat build` directly.
 
-The built jar lands in `build/libs/hexcessible-forge-1.20.1-0.3.1.1f5.jar`. To
+The built jar lands in `build/libs/hexcessible-forge-1.20.1-0.3.1.1f6.jar`. To
 run a dev client:
 
 ```bat

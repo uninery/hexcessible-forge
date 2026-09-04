@@ -30,12 +30,10 @@ public class DrawStateScreenMixin {
         var overlayFocused = BookOverlay.isOverlayFocused();
 
         if (keyCode == GLFW.GLFW_KEY_ESCAPE) {
-            if (BookOverlay.isVisible()) {
-                // first Esc closes the floating book, second one exits casting
-                BookOverlay.close();
-            } else {
-                state.requestExit();
-            }
+            // Esc only exits the casting interface. It never closes the
+            // floating Hex Notebook - close that with its × button or the
+            // docs key instead.
+            state.requestExit();
             cir.setReturnValue(true);
             return;
         }
