@@ -86,6 +86,16 @@ public final class BookOverlay {
         return visible;
     }
 
+    /**
+     * True while the overlay is actually shown over the current casting
+     * screen. Only then may Patchouli navigation be rerouted into it; once
+     * the casting UI is gone the real book item must open the normal
+     * fullscreen notebook again.
+     */
+    public static boolean isActive() {
+        return visible && book != null;
+    }
+
     public static boolean isDragging() {
         return dragging;
     }
@@ -213,7 +223,7 @@ public final class BookOverlay {
      * (called from the BookContents mixin instead of {@code mc.setScreen}).
      */
     public static void navigateTo(GuiBook gui, boolean push) {
-        if (!open)
+        if (!isActive())
             return;
         if (push && book != null && gui != book)
             gui.book.getContents().guiStack.push(book);
