@@ -200,25 +200,6 @@ gradlew.bat runClient
   play session; the drawstate logic itself is unchanged from the Fabric
   original.
 
-## Known incompatibility: ImmediatelyFast on 1.20.1 (auto-mitigated)
-
-ImmediatelyFast's 1.20.x builds (e.g. `ImmediatelyFast-Forge-1.5.5+1.20.4.jar`,
-which declare support for `[1.20,1.20.4]` and are the only 1.20.1 builds IF
-publishes) render the hexcessible autocomplete text as boxes/tofu on 1.20.1.
-Bisection shows the culprit is IF's `font_atlas_resizing` feature (glyph atlas
-256→2048): its mixin targets the 1.20.4 glyph-atlas implementation and is not
-fully compatible with the 1.20.1 one when many glyphs are uploaded dynamically,
-which the autocomplete panel does every frame.
-
-Hexcessible mitigates this automatically: `ImmediatelyFastCompat` detects IF
-during `FMLClientSetupEvent` (before any glyph atlas exists) and flips IF's
-runtime `font_atlas_resizing` flag to false via reflection, so every atlas is
-created at 256×256. No user configuration is needed; the startup log notes
-"ImmediatelyFast detected: disabled its font_atlas_resizing feature...".
-The mitigation is soft-failing and only touches IF's public runtime-config
-fields. This is an IF/1.20.1 compatibility bug, not a hexcessible one —
-hexcessible only uses standard `GuiGraphics`/`Font` calls.
-
 ## Runtime dependencies (all from the Fabric build, Forge variants)
 
 | Mod | Version |
