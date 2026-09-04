@@ -15,9 +15,7 @@ import dev.tizu.hexcessible.drawstate.Idling;
 import dev.tizu.hexcessible.drawstate.KeyboardDrawing;
 import dev.tizu.hexcessible.drawstate.MouseDrawing;
 import dev.tizu.hexcessible.gui.BookOverlay;
-import dev.tizu.hexcessible.gui.KeybindButton;
 import dev.tizu.hexcessible.keybinds.KeyBinds;
-import net.minecraft.client.gui.GuiGraphics;
 import net.minecraft.client.gui.screens.Screen;
 
 @Mixin(Screen.class)
@@ -86,21 +84,5 @@ public class DrawStateScreenMixin {
     private void onScreenRemoved(CallbackInfo ci) {
         if ((Object) this instanceof DrawStateMixinAccessor)
             BookOverlay.onCastUiClosed();
-    }
-
-    /**
-     * The very last thing of the screen pass: draws the floating Hex Notebook
-     * and the keybindings button above everything the casting interface
-     * painted this frame (BookOverlay flushes the still-buffered UI text
-     * first), so no grid dot, pattern or tooltip can appear over them.
-     */
-    @Inject(method = "renderWithTooltip", at = @At("RETURN"))
-    private void afterScreenRender(GuiGraphics ctx, int mouseX, int mouseY,
-            float partialTick, CallbackInfo ci) {
-        if (!((Object) this instanceof DrawStateMixinAccessor))
-            return;
-        BookOverlay.onHostRender(mouseX, mouseY);
-        BookOverlay.render(ctx, mouseX, mouseY, partialTick);
-        KeybindButton.render(ctx, mouseX, mouseY);
     }
 }

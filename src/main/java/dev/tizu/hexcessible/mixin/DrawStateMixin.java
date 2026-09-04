@@ -133,10 +133,9 @@ public class DrawStateMixin implements DrawStateMixinAccessor {
         if (!noActing) {
             state.onRender(ctx, mouseX, mouseY);
             renderHints(ctx);
-            // The floating Hex Notebook and the keybindings button are drawn
-            // at the very end of the screen pass (see DrawStateScreenMixin's
-            // renderWithTooltip hook), so nothing of the drawing interface can
-            // paint over them.
+            BookOverlay.onHostRender(mouseX, mouseY);
+            BookOverlay.render(ctx, mouseX, mouseY, delta);
+            hexcessible$renderKeybindButton(ctx, mouseX, mouseY);
         }
     }
 
@@ -173,10 +172,35 @@ public class DrawStateMixin implements DrawStateMixinAccessor {
     // ------------------------------------------------------------------
 
     @Unique
+    private static int[] hexcessible$keybindButtonRect(int guiWidth, int guiHeight) {
+        var label = Component.translatable("hexcessible.ui.keybind");
+        var w = Minecraft.getInstance().font.width(label) + 14;
+        var x0 = guiWidth - w - 6;
+        var y0 = guiHeight - 20;
+        return new int[] { x0, y0, guiWidth - 6, guiHeight - 6 };
+    }
+
+    @Unique
     private boolean hexcessible$isOverKeybindButton(int mx, int my) {
-        return dev.tizu.hexcessible.gui.KeybindButton.isOver(mx, my,
+        var r = hexcessible$keybindButtonRect(
                 ((GuiSpellcasting) (Object) this).width,
                 ((GuiSpellcasting) (Object) this).height);
+        return mx >= r[0] && mx <= r[2] && my >= r[1] && my <= r[3];
+    }
+
+    @Unique
+    private void hexcessible$renderKeybindButton(GuiGraphics ctx, int mx, int my) {
+        var r = hexcessible$keybindButtonRect(ctx.guiWidth(), ctx.guiHeight());
+        var hovered = mx >= r[0] && mx <= r[2] && my >= r[1] && my <= r[3];
+        ctx.fill(r[0], r[1], r[2], r[3], hovered ? 0x80_3d3f52 : 0x60_15121c);
+        ctx.fill(r[0], r[1], r[2], r[1] + 1, hovered ? 0xff_f5d76e : 0x66_6e738d);
+        ctx.fill(r[0], r[3] - 1, r[2], r[3], hovered ? 0xff_f5d76e : 0x66_6e738d);
+        ctx.fill(r[0], r[1], r[0] + 1, r[3], hovered ? 0xff_f5d76e : 0x66_6e738d);
+        ctx.fill(r[2] - 1, r[1], r[2], r[3], hovered ? 0xff_f5d76e : 0x66_6e738d);
+        var label = Component.translatable("hexcessible.ui.keybind");
+        var font = Minecraft.getInstance().font;
+        ctx.drawCenteredString(font, label, (r[0] + r[2]) / 2,
+                r[1] + (r[3] - r[1]) / 2 - 4, hovered ? 0xff_ffffff : 0xff_c9c2d6);
     }
 
     /**
